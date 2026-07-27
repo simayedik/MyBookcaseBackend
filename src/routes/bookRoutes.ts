@@ -1,12 +1,14 @@
 import { Router,   } from 'express';
+import type { Request, Response } from 'express';
 import { pool } from '../config/db.js';
+
 
 const router = Router();
 
 
 
 // Google Books API üzerinden kitap arama (GET /api/books/search?q=seker+portakali)
-router.get('/search', async (req, res) => {
+router.get('/search', async (req: Request, res: Response) => {
   const { q } = req.query;
 
   if (!q || typeof q !== 'string') {
@@ -48,7 +50,7 @@ router.get('/search', async (req, res) => {
   }
 });
 // 1. Kullanıcının Kütüphanesini Getir (Örn: GET /api/books?username=abla)
-router.get('/', async (req, res) => {
+router.get('/', async (req: Request, res: Response) => {
   const { username } = req.query;
 
   try {
@@ -84,7 +86,7 @@ router.get('/', async (req, res) => {
 });
 
 // 2. Yeni Kitap Ekle ve Kullanıcıya Bağla (POST /api/books)
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
   const { title, author, coverUrl, pageCount, username, status, startDate, finishDate, rating, notes } = req.body;
 
   const client = await pool.connect();
