@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import bookRoutes from './routes/bookRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/books', bookRoutes);
+app.use('/api/users', userRoutes);
 
 // Healthcheck Route (Sunucunun çalıştığını test etmek için)
 app.get('/health', (req: Request, res: Response) => {
