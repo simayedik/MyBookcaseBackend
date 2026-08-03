@@ -1,11 +1,35 @@
-import { Router,   } from 'express';
+import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { pool } from '../config/db.js';
-
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 
+// --- MULTER YAPILANDIRMASI ---
+// Yüklenen dosyaların kaydedileceği klasör
+const uploadDir = 'uploads/';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (_req, file, cb) => {
+    // Çakışmaları önlemek için unique dosya ismi
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `cover-${uniqueSuffix}${ext}`);
+  }
+});
+
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 } // Maksimum 5MB
+});
 
 // Google Books API üzerinden kitap arama (GET /api/books/search?q=seker+portakali)
 router.get('/search', async (req: Request, res: Response) => {
@@ -49,6 +73,7 @@ router.get('/search', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: 'Kitap araması başarısız.' });
   }
 });
+
 // 1. Kullanıcının Kütüphanesini Getir (Örn: GET /api/books?username=abla)
 router.get('/', async (req: Request, res: Response) => {
   const { username } = req.query;
@@ -86,18 +111,37 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // 2. Yeni Kitap Ekle ve Kullanıcıya Bağla (POST /api/books)
-router.post('/', async (req: Request, res: Response) => {
-  const { title, author, coverUrl, pageCount, username, status, startDate, finishDate, rating, notes } = req.body;
+// upload.single('cover') eklendi: React Native FormData tarafındaki 'cover' ismiyle eşleşmeli!
+router.post('/', upload.single('cover'), async (req: Request, res: Response) => {
+  const { 
+    title, 
+    author, 
+    coverUrl, 
+    pageCount, 
+    username, 
+    status, 
+    startDate, 
+    finishDate, 
+    rating, 
+    notes 
+  } = req.body;
 
   const client = await pool.connect();
 
   try {
-    // Transaction Başlatıyoruz (Veri tutarlılığı için)
+    // 📷 Kapak resmi önceliği: Yüklenen Dosya > Gelen URL String'i > Boş Metin
+    let finalCoverUrl = coverUrl || '';
+    if (req.file) {
+      // Sunucu domaininizle birleştirebilirsiniz (Örn: /uploads/cover-123.jpg)
+      finalCoverUrl = `/uploads/${req.file.filename}`;
+    }
+
     await client.query('BEGIN');
 
     // a. Kullanıcı ID'sini al
     const userResult = await client.query('SELECT id FROM users WHERE username = $1', [username]);
     if (userResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı' });
       return;
     }
@@ -107,7 +151,7 @@ router.post('/', async (req: Request, res: Response) => {
     const bookResult = await client.query(
       `INSERT INTO books (title, author, cover_url, page_count) 
        VALUES ($1, $2, $3, $4) RETURNING id`,
-      [title, author, coverUrl, pageCount || 0]
+      [title, author, finalCoverUrl, Number(pageCount) || 0]
     );
     const bookId = bookResult.rows[0].id;
 
@@ -115,11 +159,20 @@ router.post('/', async (req: Request, res: Response) => {
     await client.query(
       `INSERT INTO user_book_activity (user_id, book_id, status, start_date, finish_date, rating, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [userId, bookId, status || 'TO_READ', startDate || null, finishDate || null, rating || 0, notes || '']
+      [
+        userId, 
+        bookId, 
+        status || 'TO_READ', 
+        startDate || null, 
+        finishDate || null, 
+        Number(rating) || 0, 
+        notes || ''
+      ]
     );
 
     await client.query('COMMIT');
     res.status(201).json({ success: true, message: 'Kitap başarıyla eklendi', bookId });
+
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Kitap eklenirken hata oluştu:', error);
