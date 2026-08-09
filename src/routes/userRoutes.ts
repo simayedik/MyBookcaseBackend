@@ -10,7 +10,7 @@ const router = Router();
 router.get('/',getUsers);
 router.post('/',createUser);
 // Route tanımı
-router.delete('/users/:userId', deleteUsers);
+router.delete('/:userId', deleteUsers);
 
 
 export default router;
