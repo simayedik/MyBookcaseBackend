@@ -182,4 +182,47 @@ router.post('/', upload.single('cover'), async (req: Request, res: Response) => 
   }
 });
 
+
+// GET yerine DELETE kullanıyoruz
+// Kullanım: DELETE /books/12
+router.delete('/books/:bookId', async (req: Request, res: Response) => {
+  const { bookId } = req.params; // req.query yerine req.params
+
+  // 1. Parametre kontrolü
+  if (!bookId) {
+    return res.status(400).json({
+      success: false,
+      message: 'bookId parametresi zorunludur.' // Düzeltildi
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      'DELETE FROM books WHERE id = $1 RETURNING *',
+      [bookId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Silinecek kitap bulunamadı.'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Kitap başarıyla silindi.',
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Kitap silinirken hata oluştu:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Sunucu hatası' 
+    });
+  }
+});
+
+
 export default router;

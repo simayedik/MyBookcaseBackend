@@ -61,3 +61,43 @@ export const getUsers = async(req: Request, res: Response) => {
         });
     }
 }
+export const deleteUsers = async (req: Request, res: Response) => {
+    // req.query yerine req.params kullanıyoruz
+    const { userId } = req.params;
+
+    // 1. Parametre kontrolü
+    if (!userId) {
+        return res.status(400).json({
+            success: false,
+            message: 'userId parametresi zorunludur.'
+        });
+    }
+
+    try {
+        // 2. SQL Injection'ı önlemek için parametrize edilmiş sorgu ve WHERE şartı
+        const result = await pool.query(
+            'DELETE FROM users WHERE id = $1 RETURNING *',
+            [userId]
+        );
+
+        // 3. Kullanıcı bulunamadıysa (silinecek kayıt yoksa)
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Silinecek kullanıcı bulunamadı.'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Kullanıcı başarıyla silindi.',
+            data: result.rows[0] // RETURNING * kullandığımız için silinen kullanıcı bilgisi döner
+        });
+    } catch (error) {
+        console.error('Kullanıcı silinirken hata oluştu:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Sunucu hatası'
+        });
+    }
+};
