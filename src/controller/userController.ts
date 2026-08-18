@@ -4,7 +4,7 @@ import { pool } from '../config/db.js';
 export const createUser = async(req: Request, res: Response) => {
 
     try{
-        const {username,display_name } = req.body;
+        const {username,display_name ,avatar_url} = req.body;
        
         if(!username || !display_name){
             res.status(400).json({
@@ -25,8 +25,8 @@ export const createUser = async(req: Request, res: Response) => {
         }     
 
         const newUser = await pool.query(
-            'INSERT INTO users(username ,display_name) VALUES($1,$2) RETURNING *',
-            [username.toLowerCase().trim(), display_name.trim()]
+            'INSERT INTO users(username ,display_name,avatar_url) VALUES($1,$2,$3) RETURNING *',
+            [username.toLowerCase().trim(), display_name.trim(),avatar_url.trim()]
         );
 
         res.status(201).json({

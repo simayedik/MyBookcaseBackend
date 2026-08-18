@@ -183,9 +183,64 @@ router.post('/', upload.single('cover'), async (req: Request, res: Response) => 
 });
 
 
+
+// PUT /:id - Kitap Güncelle
+router.put('/:id', async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { title, author, status, rating, notes } = req.body;
+
+        // COALESCE'e girecek değerlerin undefined yerine null/değer olmasını sağlıyoruz
+        const updateQuery = `
+            UPDATE books 
+            SET 
+                title = COALESCE($1, title),
+                author = COALESCE($2, author),
+                status = COALESCE($3, status),
+                rating = COALESCE($4, rating),
+                notes = COALESCE($5, notes),
+                updated_at = NOW()
+            WHERE id = $6
+            RETURNING *;
+        `;
+
+        const values = [
+            title ?? null,
+            author ?? null,
+            status ?? null,
+            rating ?? null,
+            notes ?? null,
+            id
+        ];
+
+        // Doğrudan UPDATE çalıştırıyoruz (Tek sorgu)
+        const result = await pool.query(updateQuery, values);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Güncellenecek kitap bulunamadı.'
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Kitap başarıyla güncellendi.',
+            data: result.rows[0]
+        });
+
+    } catch (error) {
+        console.error('Update Book Error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Kitap güncellenirken sunucu hatası oluştu.'
+        });
+    }
+});
+
 // GET yerine DELETE kullanıyoruz
 // Kullanım: DELETE /books/12
-router.delete('/books/:bookId', async (req: Request, res: Response) => {
+router.delete('/:bookId', async (req: Request, res: Response) => {
   const { bookId } = req.params; // req.query yerine req.params
 
   // 1. Parametre kontrolü
