@@ -222,7 +222,7 @@ router.put('/:bookId', async (req: Request, res: Response) => {
         const updateActivityQuery = `
             UPDATE user_book_activity
             SET 
-                status = COALESCE($1, status),
+                status = COALESCE($1,::reading_status, status),
                 rating = COALESCE($2, rating),
                 notes = COALESCE($3, notes),
                 updated_at = NOW()
