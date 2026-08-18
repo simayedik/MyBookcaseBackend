@@ -184,57 +184,83 @@ router.post('/', upload.single('cover'), async (req: Request, res: Response) => 
 
 
 
-// PUT /:id - Kitap Güncelle
-router.put('/:id', async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        const { title, author, status, rating, notes } = req.body;
+// PUT /:id - Kitap Bilgilerini ve Kullanıcı Aktivitesini Güncelle
+router.put('/:bookId', async (req: Request, res: Response) => {
+    const { bookId } = req.params; // book_id
+    const { title, author, status, rating, notes, username } = req.body;
 
-        // COALESCE'e girecek değerlerin undefined yerine null/değer olmasını sağlıyoruz
-        const updateQuery = `
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. `books` tablosunu güncelle (title, author)
+        const updateBookQuery = `
             UPDATE books 
             SET 
                 title = COALESCE($1, title),
-                author = COALESCE($2, author),
-                status = COALESCE($3, status),
-                rating = COALESCE($4, rating),
-                notes = COALESCE($5, notes),
-                updated_at = NOW()
-            WHERE id = $6
+                author = COALESCE($2, author)
+            WHERE id = $3
             RETURNING *;
         `;
-
-        const values = [
+        const bookResult = await client.query(updateBookQuery, [
             title ?? null,
             author ?? null,
-            status ?? null,
-            rating ?? null,
-            notes ?? null,
             id
-        ];
+        ]);
 
-        // Doğrudan UPDATE çalıştırıyoruz (Tek sorgu)
-        const result = await pool.query(updateQuery, values);
-
-        if (result.rowCount === 0) {
+        if (bookResult.rowCount === 0) {
+            await client.query('ROLLBACK');
             return res.status(404).json({
                 success: false,
                 message: 'Güncellenecek kitap bulunamadı.'
             });
         }
 
+        // 2. `user_book_activity` tablosunu güncelle (status, rating, notes)
+        // Eğer username gönderildiyse kullanıcıya özel güncelleme yapar, gönderilmediyse ilgili book_id'ye ait aktiviteyi günceller
+        const updateActivityQuery = `
+            UPDATE user_book_activity
+            SET 
+                status = COALESCE($1, status),
+                rating = COALESCE($2, rating),
+                notes = COALESCE($3, notes),
+                updated_at = NOW()
+            WHERE book_id = $4
+            ${username ? 'AND user_id = (SELECT id FROM users WHERE username = $5)' : ''}
+            RETURNING *;
+        `;
+
+        const activityValues = username 
+            ? [status ?? null, rating !== undefined ? Number(rating) : null, notes ?? null, id, username]
+            : [status ?? null, rating !== undefined ? Number(rating) : null, notes ?? null, id];
+
+        const activityResult = await client.query(updateActivityQuery, activityValues);
+
+        await client.query('COMMIT');
+
+        // Güncellenmiş birleşik veriyi dönüyoruz
+        const updatedData = {
+            ...bookResult.rows[0],
+            ...activityResult.rows[0],
+            book_id: bookResult.rows[0].id
+        };
+
         return res.status(200).json({
             success: true,
             message: 'Kitap başarıyla güncellendi.',
-            data: result.rows[0]
+            data: updatedData
         });
 
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('Update Book Error:', error);
         return res.status(500).json({
             success: false,
             message: 'Kitap güncellenirken sunucu hatası oluştu.'
         });
+    } finally {
+        client.release();
     }
 });
 
