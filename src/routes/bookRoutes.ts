@@ -206,7 +206,7 @@ router.put('/:bookId', async (req: Request, res: Response) => {
         const bookResult = await client.query(updateBookQuery, [
             title ?? null,
             author ?? null,
-            id
+            bookId
         ]);
 
         if (bookResult.rowCount === 0) {
@@ -227,7 +227,6 @@ router.put('/:bookId', async (req: Request, res: Response) => {
                 notes = COALESCE($3, notes),
                 updated_at = NOW()
             WHERE book_id = $4
-            ${username ? 'AND user_id = (SELECT id FROM users WHERE username = $5)' : ''}
             RETURNING *;
         `;
 
